@@ -1,197 +1,144 @@
-const express = require('express')
-var fs = require('fs')
-var template =require('./lib/template.js')
-const app = express()
-const port = 3003
+var express = require('express');
+var app = express();
+var fs = require('fs');
+var template = require('./lib/template.js');
+var path = require('path');
+var qs = require('querystring');
+var sanitizeHtml = require('sanitize-html');
+
 
 //app.get('/', (req, res) => res.send('Hello World!'))
-app.get('/', (request, response) => fs.readdir('./data', function(error, filelist){
-              var title = 'Welcome';
-              var description = 'Hello, Node.js';
-              var list = template.list(filelist);
-              var html = template.HTML(title, list, 
-                `<h2>${title}</h2>${description}`,
-                `<a href="/create">create</a>`
-                );
-              response.writeHead(200);
-              response.end(html);
-            }))
+app.get('/', (request, response) => fs.readdir('./data', function (error, filelist) {
+  var title = 'Welcome';
+  var description = 'Hello, Node.js';
+  var list = template.list(filelist);
+  var html = template.HTML(title, list,
+    `<h2>${title}</h2>${description}`,
+    `<a href="/create">create</a>`
+  );
+  response.send(html);
+}))
 
-app.get('/page', (req, res) => res.send('/page'))
+app.get('/page/:pageId', (request, response) =>
+  fs.readdir('./data', function (error, filelist) {
+    var filteredId = path.parse(request.params.pageId).base;
+    fs.readFile(`data/${filteredId}`, 'utf8', function (err, description) {
+      var title = request.params.pageId;
+      var sanitizedTitle = sanitizeHtml(title);
+      var sanitizeDescription = sanitizeHtml(description, {
+        allowedTags: ['hi']
+      });
+      var list = template.list(filelist);
+      var html = template.HTML(title, list,
+        `<h2>${sanitizedTitle}</h2>${sanitizeDescription}`,
+        `<a href="/create">create</a>  
+                <a href="/update/${filteredId}">update</a>
+                <form action="/delete_process" method="post">
+                <input type="hidden" name="id" value="${sanitizedTitle}">
+                <input type="submit" value="delete">
+                </form>
+                `);
+      response.send(html);
+    });
 
-app.listen(port, () => console.log(`Example app listening at http://localhost:${port}`))
+  }))
+app.get('/create', (request, response) =>
+  fs.readdir('./data', function (error, filelist) {
+    var title = 'WEB - create';
+    var list = template.list(filelist);
+    var html = template.HTML(title, list, `
+                <form action = "/create_process" method="post">
+                  <p><input type="text" name="title" placeholder="title"></p>
+                  <p>
+                    <textarea name="description" placeholder="description"></textarea>
+                  </p>
+                  <p>
+                    <input type="submit">
+                  </p>
+                </form>
+             `, '');
+    response.send(html);
+  }));
+app.post('/create_process', (request, response) => {
+  let body = '';
+  request.on('data', (data) => {
+    body = body + data;
+  });
+  request.on('end', () => {
+    let post = qs.parse(body);
+    let title = post.title;
+    let description = post.description;
+    fs.writeFile(`data/${title}`, description, 'utf8', (err) => {
+      response.writeHead(302, { Location: `/page/${title}` });
+      response.end();
+    })
+  })
+});
 
+app.get('/update/:pageId', (request, response) => {
+  fs.readdir('./data', (error, filelist) => {
+    let filteredId = path.parse(request.params.pageId).base;
+    fs.readFile(`data/${filteredId}`, 'utf8', (err, description) => {
+      let title = request.params.pageId;
+      let list = template.list(filelist);
+      let html = template.HTML(title, list,
+        `
+              <form action="/update_process" method="post">
+              <input type="hidden" name="id" value="${title}">
+              <p><input type="text" name="title" placeholder="title" value="${title}"></p>
+              <p>
+              <textarea name="description" placeholder="description">${description}</textarea>
+              </p>
+              <p>
+                <input type="submit">
+              </p>
+              </form>
+            `,
+        `<a href="/create">create</a>  <a href="/update/${title}">update</a>`);
+      response.send(html);
+    })
+  })
+})
 
-// var http = require('http');
-// var fs = require('fs');
-// var url = require('url');
-// var qs = require('querystring');
- 
-// function templateHTML(title, list, body, control){
-//   return `
-//   <!doctype html>
-//   <html>
-//   <head>
-//     <title>WEB1 - ${title}</title>
-//     <meta charset="utf-8">
-//   </head>
-//   <body>
-//     <h1><a href="/">WEB</a></h1>
-//     ${list}
-//     ${control}
-//     ${body}
-//   </body>
-//   </html>
-//   `;
-// }
-// function templateList(filelist){
-//   var list = '<ul>';
-//   var i = 0;
-//   while(i < filelist.length){
-//     list = list + `<li><a href="/?id=${filelist[i]}">${filelist[i]}</a></li>`;
-//     i = i + 1;
-//   }
-//   list = list+'</ul>';
-//   return list;
-// }
- 
-// var app = http.createServer(function(request,response){
-//     var _url = request.url;
-//     console.log(_url); // _url-> /?id=CSS
-//     var queryData = url.parse(_url, true).query;
-//     console.log(url.parse(_url, true));
-//     console.log(queryData); // queryData ->  { id: 'CSS' }
-//     var pathname = url.parse(_url, true).pathname;
-//     console.log(pathname); // pathname -> /  
-//     if(pathname === '/'){
-//       if(queryData.id === undefined){
-//         fs.readdir('./data', function(error, filelist){
-//           var title = 'Welcome';
-//           var description = 'Hello, Node.js';
-//           var list = templateList(filelist);
-//           var template = templateHTML(title, list, 
-//             `<h2>${title}</h2>${description}`,
-//             `<a href="/create">create</a>`
-//             );
-//           response.writeHead(200);
-//           response.end(template);
-//         });
-//       } else {
-//         fs.readdir('./data', function(error, filelist){
-//           fs.readFile(`data/${queryData.id}`, 'utf8', function(err, description){
-//             var title = queryData.id;
-//             var list = templateList(filelist);
-//             var template = templateHTML(title, list, 
-//               `<h2>${title}</h2>${description}`,
-//               `<a href="/create">create</a>  
-//               <a href="/update?id=${title}">update</a>
-//               <form action="/delete_process" method="post">
-//               <input type="hidden" name="id" value="${title}">
-//               <input type="submit" value="delete">
-//               </form>
-//               `);
-//             response.writeHead(200);
-//             response.end(template);
-//           });
-//         });
-//       }
-//     } else if(pathname === '/create'){
-//           fs.readdir('./data', function(error, filelist){
-//              var title = 'WEB - create';
-//              var list = templateList(filelist); 
-//              var template = templateHTML(title, list, `
-//                 <form action = "/create_process" method="post">
-//                   <p><input type="text" name="title" placeholder="title"></p>
-//                   <p>
-//                     <textarea name="description" placeholder="description"></textarea>
-//                   </p>
-//                   <p>
-//                     <input type="submit">
-//                   </p>
-//                 </form>
-//              `,'');
-//              response.writeHead(200);
-//              response.end(template);
-//           });
-//     }else if(pathname === '/create_process'){
-//              var body = ``;
-//              request.on('data', function(data){
-//                 body = body + data;
-//              });
+app.post('/update_process', (request, response) => {
+  let body = ``;
+  request.on('data', (data) => {
+    body = body + data;
+  });
 
-//              request.on('end', function(){
-//                var post = qs.parse(body);
-//                var title = post.title;
-//                var description = post.description;
-//                fs.writeFile(`data/${title}` , description, 'utf8', function(err){
-//                  response.writeHead(302, {Location: `/?id=${title}`});
-//                  response.end();
-//                })
-//              });
-//     }else if(pathname === '/update'){
-//       fs.readdir('./data', function(error, filelist){
-//         fs.readFile(`data/${queryData.id}`, 'utf8', function(err, description){
-//           var title = queryData.id;
-//           var list = templateList(filelist);
-//           var template = templateHTML(title, list, 
-//             `
-//               <form action="/update_process" method="post">
-//               <input type="hidden" name="id" value="${title}">
-//               <p><input type="text" name="title" placeholder="title" value="${title}"></p>
-//               <p>
-//               <textarea name="description" placeholder="description">${description}</textarea>
-//               </p>
-//               <p>
-//                 <input type="submit">
-//               </p>
-//               </form>
-//             `,
-//             `<a href="/create">create</a>  <a href="/update?id=${title}">update</a>`);
-//           response.writeHead(200);
-//           response.end(template);
-//         });
-//       });
-//     }else if(pathname ==='/update_process'){
-//       var body = ``;
-//       request.on('data', function(data){
-//          body = body + data;
-//       });
+  request.on('end', () => {
+    let post = qs.parse(body);
+    console.log(post);
+    let id = post.id;
+    let title = post.title;
+    let description = post.description;
+    fs.rename(`data/${id}`, `data/${title}`, (error) => {
+      fs.writeFile(`data/${title}`, description, 'utf8', function (err) {
+        response.writeHead(302, { Location: `/page/${title}` });
+        response.end();
+      })
+    });
 
-//       request.on('end', function(){
-//         var post = qs.parse(body);
-//         console.log(post);
-//         var id = post.id;
-//         var title = post.title;
-//         var description = post.description;
-//         fs.rename(`data/${id}`, `data/${title}`, function(error){
-//           fs.writeFile(`data/${title}` , description, 'utf8', function(err){
-//           response.writeHead(302, {Location: `/?id=${title}`});
-//           response.end();
-//           }) 
-//         });
+  });
+})
 
-//       });
-//     }else if(pathname ==='/delete_process'){
-//       var body = ``;
-//       request.on('data', function(data){
-//          body = body + data;
-//       });
+app.post('/delete_process', (request, response) => {
+  let body = ``;
+  request.on('data',  (data) => {
+    body = body + data;
+  });
 
-//       request.on('end', function(){
-//         var post = qs.parse(body);
-//         console.log(post);
-//         var id = post.id;
-//        fs.unlink(`data/${id}`, function(error){
-//         response.writeHead(302, {Location:`/`});
-//         response.end();
-//        }) 
+  request.on('end',  () => {
+    let post = qs.parse(body);
+    console.log(post);
+    let id = post.id;
+    let filteredId = path.parse(id).base;
+    fs.unlink(`data/${filteredId}`,  (error) => {
+      response.redirect('/')
+    })
 
-//       });
-//     }
-//     else {
-//       response.writeHead(404);
-//       response.end('Not found');
-//     }
-
-// });
-// app.listen(3000);
+  });
+})
+app.listen(3000, () =>
+  console.log('Example app listening on port 3000!')
+)
