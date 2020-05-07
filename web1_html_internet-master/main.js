@@ -5,9 +5,13 @@ var template = require('./lib/template.js');
 var path = require('path');
 var qs = require('querystring');
 var sanitizeHtml = require('sanitize-html');
+var bodyParser = require('body-parser');
+var compression = require('compression');
+// prepare using middleware 
+app.use(bodyParser.urlencoded({ extended: false}));
+app.use(compression());
 
-
-//app.get('/', (req, res) => res.send('Hello World!'))
+// app.get('/', (req, res) => res.send('Hello World!'))
 app.get('/', (request, response) => fs.readdir('./data', function (error, filelist) {
   var title = 'Welcome';
   var description = 'Hello, Node.js';
@@ -60,12 +64,8 @@ app.get('/create', (request, response) =>
     response.send(html);
   }));
 app.post('/create_process', (request, response) => {
-  let body = '';
-  request.on('data', (data) => {
-    body = body + data;
-  });
-  request.on('end', () => {
-    let post = qs.parse(body);
+
+    let post = request.body;
     let title = post.title;
     let description = post.description;
     fs.writeFile(`data/${title}`, description, 'utf8', (err) => {
@@ -73,7 +73,6 @@ app.post('/create_process', (request, response) => {
       response.end();
     })
   })
-});
 
 app.get('/update/:pageId', (request, response) => {
   fs.readdir('./data', (error, filelist) => {
@@ -101,35 +100,21 @@ app.get('/update/:pageId', (request, response) => {
 })
 
 app.post('/update_process', (request, response) => {
-  let body = ``;
-  request.on('data', (data) => {
-    body = body + data;
-  });
-
-  request.on('end', () => {
-    let post = qs.parse(body);
+    let post = request.body;
     console.log(post);
     let id = post.id;
     let title = post.title;
     let description = post.description;
     fs.rename(`data/${id}`, `data/${title}`, (error) => {
       fs.writeFile(`data/${title}`, description, 'utf8', function (err) {
-        response.writeHead(302, { Location: `/page/${title}` });
-        response.end();
+        response.redirect(`/page/${title}`);
       })
     });
-
   });
-})
+
 
 app.post('/delete_process', (request, response) => {
-  let body = ``;
-  request.on('data',  (data) => {
-    body = body + data;
-  });
-
-  request.on('end',  () => {
-    let post = qs.parse(body);
+    let post = request.body;
     console.log(post);
     let id = post.id;
     let filteredId = path.parse(id).base;
@@ -138,7 +123,6 @@ app.post('/delete_process', (request, response) => {
     })
 
   });
-})
 app.listen(3000, () =>
   console.log('Example app listening on port 3000!')
 )
